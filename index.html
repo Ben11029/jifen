@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>桌游计分器 (Wingspan + PARKS 2)</title> <!-- 更改：更新标题 -->
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Inter 字体 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* 使用 Inter 字体作为基础字体 */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        }
+        
+        /* 更改：为 WINGSPAN 添加独立的获胜者样式 */
+        .winner-col-ws {
+            background-color: #FEF9C3; /* yellow-200 */
+        }
+        /* 新增：为 PARKS 添加独立的获胜者样式 */
+        .winner-col-parks {
+            background-color: #FDE68A; /* amber-300 */
+        }
+
+        /* 优化数字输入框在 Webkit 浏览器上的显示 (移除小箭头) */
+        input[type='number']::-webkit-inner-spin-button,
+        input[type='number']::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type='number'] {
+            -moz-appearance: textfield; /* 移除 Firefox 上的小箭头 */
+        }
+        /* 表格输入框样式 */
+        .table-input {
+            width: 100px; /* 固定宽度，因为现在是垂直的 */
+            padding: 8px 4px;
+            border: 1px solid #D1D5DB; /* gray-300 */
+            border-radius: 6px;
+            text-align: center;
+            font-size: 1.125rem; /* text-lg */
+        }
+        .table-input:focus {
+            border-color: #3B82F6; /* blue-500 */
+            box-shadow: 0 0 0 2px #BFDBFE; /* blue-200 */
+            outline: none;
+        }
+        /* 玩家名字输入框 */
+        .player-name-input {
+            width: 120px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.125rem;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            padding: 4px;
+        }
+        .player-name-input:focus {
+            border-color: #3B82F6; /* blue-500 */
+            outline: none;
+        }
+    </style>
+</head>
+<body class="bg-stone-100 min-h-screen"> <!-- 更改：更自然的背景色 -->
+
+    <!-- 1. 顶部控制栏 -->
+    <header class="bg-white p-4 shadow-md sticky top-0 z-20"> <!-- 更改：z-20 确保在毛玻璃之上 -->
+        <div class="container mx-auto flex flex-wrap justify-between items-center gap-4">
+            <h1 class="text-2xl font-bold text-teal-800">
+                🎲 桌游计分器
+            </h1>
+            <!-- 移除了全局的添加/重置按钮 -->
+        </div>
+    </header>
+
+    <!-- 2. WINGSPAN 计分器部分 -->
+    <section id="wingspan-section" class="p-4 md:p-6">
+        <!-- 更改：添加了 Wingspan 的专属控制栏 -->
+        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+            <h2 class="text-3xl font-bold text-teal-700">🐦 展翅翱翔 (Wingspan)</h2>
+            <div class="flex gap-3 flex-shrink-0">
+                <button id="ws-add-player" class="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    ＋ 添加玩家
+                </button>
+                <button id="ws-reset-game" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    🔄 重置游戏
+                </button>
+            </div>
+        </div>
+        
+        <!-- Wingspan 计分表格 -->
+        <div class="overflow-x-auto bg-white rounded-lg shadow-lg">
+            <table class="w-full min-w-max" id="wingspan-score-table">
+                <!-- 更改：所有 ID 添加 'ws-' 前缀 -->
+                <thead>
+                    <tr id="ws-remove-row" class="bg-stone-100 border-b border-gray-200">
+                        <th class="p-2 sticky left-0 bg-stone-100/75 backdrop-blur-sm text-sm font-medium text-gray-600 z-10">移除玩家</th>
+                    </tr>
+                    <tr id="ws-player-name-row" class="text-gray-700"> <!-- JS 会应用主题 -->
+                        <th class="p-4 text-left text-lg font-bold sticky left-0 z-10">
+                            <span class="theme-placeholder">计分项</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🐦 鸟类牌</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">⭐ 奖励卡</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🏆 轮末目标</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🥚 鸟蛋</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🍇 贮藏</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🔀 塞入</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr id="ws-total-row"> <!-- JS 会应用主题 -->
+                        <td class="p-4 text-lg font-bold sticky left-0 z-10">
+                            <span class="total-text-placeholder text-amber-900">👑 总分</span>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </section>
+
+    <!-- 页面分隔线 -->
+    <hr class="container mx-auto border-t-2 border-stone-300 my-4">
+
+    <!-- 3. PARKS 计分器部分 -->
+    <section id="parks-section" class="p-4 md:p-6">
+        <!-- ... (PARKS header) ... -->
+        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+            <h2 class="text-3xl font-bold text-green-800">🌲 国家公园 (PARKS)</h2>
+            <div class="flex gap-3 flex-shrink-0">
+                <button id="parks-add-player" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    ＋ 添加玩家
+                </button>
+                <button id="parks-reset-game" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    🔄 重置游戏
+                </button>
+            </div>
+        </div>
+
+        <!-- 新增：PARKS 计分表格 -->
+        <div class="overflow-x-auto bg-white rounded-lg shadow-lg">
+            <table class="w-full min-w-max" id="parks-score-table">
+                <!-- ... (PARKS thead) ... -->
+                <thead>
+                    <tr id="parks-remove-row" class="bg-stone-100 border-b border-gray-200">
+                        <th class="p-2 sticky left-0 bg-stone-100/75 backdrop-blur-sm text-sm font-medium text-gray-600 z-10">移除玩家</th>
+                    </tr>
+                    <tr id="parks-player-name-row" class="text-gray-700"> <!-- JS 会应用主题 -->
+                        <th class="p-4 text-left text-lg font-bold sticky left-0 z-10">
+                             <span class="theme-placeholder">计分项</span>
+                        </th>
+                    </tr>
+                </thead>
+                <!-- 更改：PARKS 计分项已根据规则更新 -->
+                <tbody>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🌲 公园总分</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🧑‍🚀 个人目标</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🖼️ 照片分数 <span class="text-sm text-gray-500">(1分/张)</span></td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">📷 照片奖励 <span class="text-sm text-gray-500">(最多/第二多)</span></td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">📅 季节奖励 <span class="text-sm text-gray-500">（3分）</span></td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-lg font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🎖️ 起始玩家</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr id="parks-total-row"> <!-- JS 会应用主题 -->
+                        <td class="p-4 text-lg font-bold sticky left-0 z-10">
+                            <span class="total-text-placeholder text-orange-900">👑 总分</span>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </section>
+
+
+    <!-- 4. 底部提示 -->
+    <footer class="text-center p-6 text-gray-500 text-sm">
+        <p>祝您游戏愉快！</p>
+        <!-- 更改：添加 PARKS 平局规则 -->
+        <p class="mt-1">《国家公园》平局提示：平局时，访问公园最多者获胜。</p>
+    </footer>
+
+    <!-- 5. JavaScript 逻辑 (无功能性更改，它会自动适配新的行) -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- WINGSPAN 配置 ---
+            const wsConfig = {
+                tableId: 'wingspan-score-table',
+                addPlayerBtnId: 'ws-add-player',
+                resetGameBtnId: 'ws-reset-game',
+                playerNameRowId: 'ws-player-name-row',
+                removeRowId: 'ws-remove-row',
+                totalRowId: 'ws-total-row',
+                defaultPlayerPrefix: '玩家',
+                theme: {
+                    playerRow: 'bg-cyan-100',
+                    playerRowSticky: 'bg-cyan-100/75',
+                    totalRow: 'bg-amber-100',
+                    totalRowSticky: 'bg-amber-100/75',
+                    totalText: 'text-amber-900',
+                    winnerCol: 'winner-col-ws'
+                }
+            };
+
+            // --- PARKS 配置 ---
+            const parksConfig = {
+                tableId: 'parks-score-table',
+                addPlayerBtnId: 'parks-add-player',
+                resetGameBtnId: 'parks-reset-game',
+                playerNameRowId: 'parks-player-name-row',
+                removeRowId: 'parks-remove-row',
+                totalRowId: 'parks-total-row',
+                defaultPlayerPrefix: 'Hiker',
+                theme: {
+                    playerRow: 'bg-green-100', // 森林
+                    playerRowSticky: 'bg-green-100/75',
+                    totalRow: 'bg-orange-100', // 日落
+                    totalRowSticky: 'bg-orange-100/75',
+                    totalText: 'text-orange-900',
+                    winnerCol: 'winner-col-parks'
+                }
+            };
+
+            /**
+             * 核心函数：初始化一个计分表
+             * @param {object} config - 包含所有 ID 和主题配置的对象
+             */
+            function initializeScoreTable(config) {
+                const table = document.getElementById(config.tableId);
+                if (!table) return; // 如果找不到表格，则退出
+
+                const theadRow = document.getElementById(config.playerNameRowId);
+                
+                // 修复：在这里定义所有内部变量
+                const theadRemoveRow = document.getElementById(config.removeRowId);
+                const tbodyRows = table.querySelectorAll('tbody tr');
+                const tfootTotalRow = document.getElementById(config.totalRowId);
+                const addPlayerBtn = document.getElementById(config.addPlayerBtnId);
+                const resetGameBtn = document.getElementById(config.resetGameBtnId);
+                
+                let playerCount = 0;
+                const WINNER_CLASS = config.theme.winnerCol;
+
+                // --- 动态应用主题 ---
+                theadRow.classList.add(config.theme.playerRow);
+                theadRow.querySelector('th').classList.add(config.theme.playerRowSticky);
+                tfootTotalRow.classList.add(config.theme.totalRow);
+                tfootTotalRow.querySelector('td').classList.add(config.theme.totalRowSticky);
+                tfootTotalRow.querySelector('.total-text-placeholder').classList.add(config.theme.totalText);
+
+                
+                /**
+                 * 添加一个新玩家 (一整列)
+                 */
+                function robustAddPlayer() {
+                    playerCount++;
+                    
+                    // 1. 添加表头 (玩家名字)
+                    const th = document.createElement('th');
+                    th.className = 'p-2';
+                    const playerNameInput = document.createElement('input');
+                    playerNameInput.type = 'text';
+                    playerNameInput.value = `${config.defaultPlayerPrefix} ${playerCount}`;
+                    playerNameInput.className = 'player-name-input';
+                    
+                    playerNameInput.addEventListener('focus', function() {
+                        this.setAttribute('data-placeholder', this.value);
+                        this.value = '';
+                    });
+                    playerNameInput.addEventListener('blur', function() {
+                        if (this.value.trim() === '') {
+                            this.value = this.getAttribute('data-placeholder');
+                        }
+                        this.removeAttribute('data-placeholder');
+                    });
+                    th.appendChild(playerNameInput);
+                    theadRow.appendChild(th);
+
+                    // 2. 为每个计分项添加输入框 (tbody)
+                    // (此代码会自动查找所有 tbody tr, 包括我们新加的行)
+                    tbodyRows.forEach(row => {
+                        const td = document.createElement('td');
+                        td.className = 'p-2 text-center';
+                        const input = document.createElement('input');
+                        input.type = 'number';
+                        input.min = '0';
+                        input.value = '0';
+                        input.className = 'score-input table-input';
+                        input.addEventListener('input', (e) => robustUpdateScore(e.target));
+                        input.addEventListener('wheel', (e) => {
+                            e.preventDefault();
+                            let value = parseInt(input.value) || 0;
+                            if (e.deltaY < 0) value++; else value--;
+                            input.value = Math.max(0, value);
+                            robustUpdateScore(e.target);
+                        });
+                        input.addEventListener('focus', function() {
+                            if (this.value === '0') this.value = '';
+                            else this.select();
+                        });
+                        input.addEventListener('blur', function() {
+                            if (this.value.trim() === '') this.value = '0';
+                            robustUpdateScore(this);
+                        });
+                        td.appendChild(input);
+                        row.appendChild(td);
+                    });
+
+                    // 3. 添加总分单元格 (tfoot)
+                    const totalTd = document.createElement('td');
+                    totalTd.className = 'p-3 text-center';
+                    totalTd.innerHTML = `<span class="total-score text-4xl font-black ${config.theme.totalText}">0</span>`;
+                    tfootTotalRow.appendChild(totalTd);
+
+                    // 4. 添加移除按钮单元格 (thead)
+                    const removeTh = document.createElement('th');
+                    removeTh.className = 'p-3 text-center';
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-player text-red-500 hover:text-red-700 font-bold text-2xl transition-colors';
+                    removeBtn.title = '移除玩家';
+                    removeBtn.innerHTML = '&times;';
+                    removeBtn.addEventListener('click', (e) => robustRemovePlayer(e.target));
+                    removeTh.appendChild(removeBtn);
+                    theadRemoveRow.appendChild(removeTh);
+
+                    highlightWinners();
+                }
+
+                /**
+                 * 移除一个玩家 (一整列)
+                 */
+                function robustRemovePlayer(button) {
+                    const colIndex = button.closest('th').cellIndex;
+                    if (colIndex > 0) {
+                        table.querySelectorAll('tr').forEach(row => {
+                            if (row.children[colIndex]) {
+                                row.removeChild(row.children[colIndex]);
+                            }
+                        });
+                        highlightWinners();
+                    }
+                }
+                
+                /**
+                 * 更新一个玩家的总分
+                 */
+                function robustUpdateScore(input) {
+                    const colIndex = input.closest('td').cellIndex;
+                    if (colIndex > 0) {
+                        let total = 0;
+                        tbodyRows.forEach(row => {
+                            const cell = row.children[colIndex];
+                            if (cell) {
+                                const scoreInput = cell.querySelector('.score-input');
+                                total += parseInt(scoreInput.value) || 0;
+                            }
+                        });
+
+                        const totalCell = tfootTotalRow.children[colIndex];
+                        if (totalCell) {
+                            totalCell.querySelector('.total-score').textContent = total;
+                        }
+                        highlightWinners();
+                    }
+                }
+
+                /**
+                 * 高亮显示得分最高的玩家列
+                 */
+                function highlightWinners() {
+                    const totalCells = tfootTotalRow.querySelectorAll('td');
+                    let maxScore = -1;
+                    const scores = [];
+
+                    if (totalCells.length <= 1) return;
+
+                    for (let i = 1; i < totalCells.length; i++) {
+                        const total = parseInt(totalCells[i].textContent) || 0;
+                        scores.push(total);
+                        if (total > maxScore) maxScore = total;
+                    }
+                    
+                    const effectiveMaxScore = maxScore > 0 ? maxScore : -1;
+
+                    scores.forEach((score, index) => {
+                        const colIndex = index + 1;
+                        if (score === effectiveMaxScore) {
+                            table.querySelectorAll('tr').forEach(row => {
+                                if(row.children[colIndex]) row.children[colIndex].classList.add(WINNER_CLASS);
+                            });
+                        } else {
+                            table.querySelectorAll('tr').forEach(row => {
+                                if(row.children[colIndex]) row.children[colIndex].classList.remove(WINNER_CLASS);
+                            });
+                        }
+                    });
+                }
+
+                /**
+                 * 重置游戏分数 (保留玩家名字)
+                 */
+                function robustResetGame() {
+                    const numPlayerCols = theadRow.children.length - 1;
+                    
+                    for (let colIndex = 1; colIndex <= numPlayerCols; colIndex++) {
+                        tbodyRows.forEach(row => {
+                            const cell = row.children[colIndex];
+                            if (cell) {
+                                const input = cell.querySelector('.score-input');
+                                if (input) input.value = '0';
+                            }
+                        });
+                        
+                        const totalCell = tfootTotalRow.children[colIndex];
+                        if (totalCell) {
+                            totalCell.querySelector('.total-score').textContent = '0';
+                        }
+                    }
+                    highlightWinners();
+                }
+
+                // --- 初始化此表格 ---
+                addPlayerBtn.addEventListener('click', robustAddPlayer);
+                resetGameBtn.addEventListener('click', robustResetGame);
+
+                // 游戏开始时默认添加 2 个玩家
+                robustAddPlayer();
+                robustAddPlayer();
+            }
+
+            // --- 启动两个计分器 ---
+            initializeScoreTable(wsConfig);
+            initializeScoreTable(parksConfig);
+        });
+    </script>
+
+</body>
+</html>
