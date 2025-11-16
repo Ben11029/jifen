@@ -2,792 +2,467 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <!-- 关键：设置视口以支持移动设备和旋转 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>人数统计 (✨ AI版)</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-    <!-- ✨ 新增：引入 Chart.js 库 -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>桌游计分器(Wingspan + PARKS 2)</title> <!-- 更改：更新标题 -->
+    <link rel="icon" href="favicon.png" type="image/png">
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Inter 字体 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        /* 关键：让页面全屏并禁止滚动 */
-        html, body {
-            width: 100%;
-            height: 100%;
+        /* 使用 Inter 字体作为基础字体 */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        }
+        
+        /* 更改：为 WINGSPAN 添加独立的获胜者样式 */
+        .winner-col-ws {
+            background-color: #FEF9C3; /* yellow-200 */
+        }
+        /* 新增：为 PARKS 添加独立的获胜者样式 */
+        .winner-col-parks {
+            background-color: #FDE68A; /* amber-300 */
+        }
+
+        /* 优化数字输入框在 Webkit 浏览器上的显示 (移除小箭头) */
+        input[type='number']::-webkit-inner-spin-button,
+        input[type='number']::-webkit-outer-spin-button {
+            -webkit-appearance: none;
             margin: 0;
-            padding: 0;
-            overflow: hidden; /* 禁止滚动条 */
-            background-color: #000; /* 黑色背景 */
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         }
-
-        /* 关键：容器现在填满整个屏幕 */
-        #container {
-            position: fixed; /* 固定在屏幕上 */
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1; /* 在底层 */
+        input[type='number'] {
+            -moz-appearance: textfield; /* 移除 Firefox 上的小箭头 */
         }
-
-        /* 关键：视频和画布也填满容器 */
-        video, canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            /* 注意: 我们没有使用 'object-fit: cover'，
-               而是让视频被拉伸以填满屏幕。
-               这样可以保证画布坐标和视频坐标
-               100% 匹配，即使比例失调。
-            */
-        }
-
-        video {
-            z-index: 1;
-            /* 适配前置摄像头镜像 */
-            transform: scaleX(1); 
-        }
-        
-        /* 关键：为前置摄像头镜像翻转画布 */
-        canvas.mirrored {
-            transform: scaleX(-1);
-        }
-
-        canvas {
-            z-index: 2;
-            background-color: transparent;
-        }
-
-        /* --- ✨ 布局改动 --- */
-
-        /* 关键：左上角的人数统计框 */
-        #count-overlay {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 10;
-            background-color: rgba(0, 0, 0, 0.6);
-            color: #fff;
-            padding: 5px 10px;
-            border-radius: 5px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-        }
-
-        /* 小方框内的元素样式 */
-        #loading-message {
-            margin: 0;
-            font-size: 0.9em;
-        }
-
-        #count {
-            margin: 0;
-            /* ✨ 字体改小 */
-            font-size: 1.2em; 
-            font-weight: bold;
-            color: #00FFFF; /* 亮青色，匹配方框 */
-            display: none; /* 默认隐藏，加载后显示 */
-        }
-
-        /* 关键：右下角的按钮控制框 */
-        #controls-overlay {
-            position: absolute;
-            bottom: 20px;
-            right: 15px;
-            z-index: 10;
-            display: flex;
-            flex-direction: row; /* 水平排列 */
-            gap: 10px; /* 按钮间距 */
-            align-items: center; /* ✨ 垂直居中对齐 */
-        }
-
-        /* 按钮通用样式 */
-        .info-button {
-            /* ✨ 移除 margin-top, 宽度自适应 */
-            padding: 8px 12px; 
-            font-size: 0.9em;
-            font-weight: bold;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-
-        /* ✨ "生成图表" 按钮样式 (原 "生成报告") */
-        #reportButton {
-            background-color: #f44336; /* 红色 */
-        }
-        #reportButton:hover {
-            background-color: #da190b;
-        }
-
-        /* 翻转按钮样式 */
-        #flipButton {
-            background-color: #9C27B0; /* 紫色 */
-        }
-        #flipButton:hover {
-            background-color: #7B1FA2;
-        }
-
-        /* 重置按钮样式 */
-        #resetButton {
-            background-color: #007bff; /* 蓝色 */
-        }
-        #resetButton:hover {
-            background-color: #0056b3;
-        }
-        
-        /* --- ✨ 移除主界面的下拉框样式 --- */
-        /* #intervalSelect {...} 已删除 */
-
-        
-        /* --- ✨ 模态框 (Modal) 样式修改 --- */
-        
-        /* 模态框遮罩层 */
-        #modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 90;
-        }
-
-        /* 模态框本体 */
-        #gemini-modal {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 100;
-            
-            background-color: #fff;
-            color: #333;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            width: 90%; /* 适配手机宽度 */
-            max-width: 500px;
-        }
-        
-        /* ✨ 模态框标题 (已添加ID) */
-        #gemini-modal h3 {
-            margin-top: 0;
-            color: #007bff;
-        }
-
-        /* ✨ 新增：模态框内部的控制栏 */
-        #chart-controls {
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        #chart-controls label {
-            font-size: 0.9em;
-            color: #555;
-            font-weight: bold;
-        }
-        #chart-controls select {
-            padding: 5px 8px;
-            font-size: 0.9em;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-        
-        /* ✨ 新增图表容器样式 */
-        #chart-container {
-            width: 100%;
-            max-height: 400px; /* 限制图表最大高度 */
-            position: relative; /* ✨ 设为相对定位，用于内部元素定位 */
-            min-height: 100px; /* ✨ 避免无数据时高度坍塌 */
-        }
-        
-        /* ✨ 新增：无数据时的提示文本 */
-        #chart-no-data {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #888;
-            font-size: 16px;
+        /* 表格输入框样式 */
+        .table-input {
+            width: 70px; /* 固定宽度，因为现在是垂直的 */
+            padding: 8px 4px;
+            border: 1px solid #D1D5DB; /* gray-300 */
+            border-radius: 6px;
             text-align: center;
-            width: 100%;
+            font-size: 1.125rem; /* text-sm */
         }
-
-        /* ✨ 当画布显示时，隐藏无数据提示 */
-        canvas:not(.modal-hidden) + #chart-no-data {
-            display: none;
+        .table-input:focus {
+            border-color: #3B82F6; /* blue-500 */
+            box-shadow: 0 0 0 2px #BFDBFE; /* blue-200 */
+            outline: none;
         }
-
-        #close-modal-button {
-            margin-top: 15px;
-            padding: 8px 15px;
+        /* 玩家名字输入框 */
+        .player-name-input {
+            width: 70px;
+            text-align: center;
             font-weight: bold;
-            color: #fff;
-            background-color: #007bff;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            float: right; /* 按钮靠右 */
+            font-size: 1.125rem;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            padding: 4px;
         }
-        
-        .modal-hidden {
-            display: none;
+        .player-name-input:focus {
+            border-color: #3B82F6; /* blue-500 */
+            outline: none;
         }
-        /* --- 结束：模态框样式 --- */
-
     </style>
 </head>
-<body>
-    
-    <!-- 视频和画布容器 (全屏) -->
-    <div id="container">
-        <video autoplay playsinline muted id="webcam"></video>
-        <canvas id="canvas"></canvas> 
-    </div>
-    
-    <!-- 关键：左上角信息框 -->
-    <div id="count-overlay">
-        <p id="loading-message">正在加载AI模型...</p>
-        <h2 id="count">累计人数: 0</h2>
-    </div>
+<body class="bg-stone-100 min-h-screen"> <!-- 更改：更自然的背景色 -->
 
-    <!-- 关键：右下角控制框 (下拉框已移除) -->
-    <div id="controls-overlay">
-        <button id="reportButton" class="info-button">✨ 生成图表</button>
-        <button id="flipButton" class="info-button">🔄 翻转镜头</button>
-        <button id="resetButton" class="info-button">重置计数</button>
-    </div>
+    <!-- 1. 顶部控制栏 -->
+    <header class="bg-white p-4 shadow-md sticky top-0 z-20"> <!-- 更改：z-20 确保在毛玻璃之上 -->
+        <div class="container mx-auto flex flex-wrap justify-between items-center gap-4">
+            <h1 class="text-2xl font-bold text-teal-800">
+                🎲 桌游计分器 Wingspan + Parks 2
+            </h1>
+            <!-- 移除了全局的添加/重置按钮 -->
+        </div>
+    </header>
 
-    <!-- ✨ 模态框 (Modal) - 内容已修改 -->
-    <div id="modal-overlay" class="modal-hidden"></div>
-    <div id="gemini-modal" class="modal-hidden">
-        <!-- ✨ 标题已修改为动态 -->
-        <h3 id="chart-modal-title">人流图表</h3>
-        
-        <!-- ✨ 新增：模态框内部的间隔选择器 -->
-        <div id="chart-controls">
-            <label for="chartIntervalSelect">选择间隔:</label>
-            <select id="chartIntervalSelect">
-                <option value="120000">每2分钟</option>
-                <option value="300000">每5分钟</option>
-                <option value="600000">每10分钟</option>
-                <option value="1800000">每30分钟</option>
-                <option value="3600000">每小时</option>
-            </select>
+    <!-- 2. WINGSPAN 计分器部分 -->
+    <section id="wingspan-section" class="p-4 md:p-6">
+        <!-- 更改：添加了 Wingspan 的专属控制栏 -->
+        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+            <h2 class="text-xl font-bold text-teal-700">🐦 展仪翱翔 (Wingspan)</h2>
+            <div class="flex gap-3 flex-shrink-0">
+                <button id="ws-add-player" class="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    ＋ 添加玩家
+                </button>
+                <button id="ws-reset-game" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    🔄 重置游戏
+                </button>
+            </div>
         </div>
         
-        <div id="chart-container">
-            <canvas id="chart-canvas"></canvas>
-            <p id="chart-no-data" class="modal-hidden">暂无数据，请至少等待一个周期后再试。</p>
+        <!-- Wingspan 计分表格 -->
+        <div class="overflow-x-auto bg-white rounded-lg shadow-lg">
+            <table class="w-full min-w-max" id="wingspan-score-table">
+                <!-- 更改：所有 ID 添加 'ws-' 前缀 -->
+                <thead>
+                    <tr id="ws-remove-row" class="bg-stone-100 border-b border-gray-200">
+                        <th class="p-2 sticky left-0 bg-stone-100/75 backdrop-blur-sm text-sm font-medium text-gray-600 z-10">移除玩家</th>
+                    </tr>
+                    <tr id="ws-player-name-row" class="text-gray-700"> <!-- JS 会应用主题 -->
+                        <th class="p-4 text-left text-sm font-bold sticky left-0 z-10">
+                            <span class="theme-placeholder">计分项</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🐦鸟牌总分</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">⭐奖励卡分</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🏆轮末目标</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🥚鸟蛋总分</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🍇贮藏食物</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🔀塞入卡片</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr id="ws-total-row"> <!-- JS 会应用主题 -->
+                        <td class="p-4 text-sm font-bold sticky left-0 z-10">
+                            <span class="total-text-placeholder text-amber-900">👑 总分</span>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
-        <button id="close-modal-button">关闭</button>
-    </div>
+    </section>
 
+    <!-- 页面分隔线 -->
+    <hr class="container mx-auto border-t-2 border-stone-300 my-4">
+
+    <!-- 3. PARKS 计分器部分 -->
+    <section id="parks-section" class="p-4 md:p-6">
+        <!-- ... (PARKS header) ... -->
+        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+            <h2 class="text-xl font-bold text-green-800">🌲 国家公园 2 (PARKS 2)</h2>
+            <div class="flex gap-3 flex-shrink-0">
+                <button id="parks-add-player" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    ＋ 添加玩家
+                </button>
+                <button id="parks-reset-game" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    🔄 重置游戏
+                </button>
+            </div>
+        </div>
+
+        <!-- 新增：PARKS 计分表格 -->
+        <div class="overflow-x-auto bg-white rounded-lg shadow-lg">
+            <table class="w-full min-w-max" id="parks-score-table">
+                <!-- ... (PARKS thead) ... -->
+                <thead>
+                    <tr id="parks-remove-row" class="bg-stone-100 border-b border-gray-200">
+                        <th class="p-2 sticky left-0 bg-stone-100/75 backdrop-blur-sm text-sm font-medium text-gray-600 z-10">移除玩家</th>
+                    </tr>
+                    <tr id="parks-player-name-row" class="text-gray-700"> <!-- JS 会应用主题 -->
+                        <th class="p-4 text-left text-sm font-bold sticky left-0 z-10">
+                             <span class="theme-placeholder">计分项</span>
+                        </th>
+                    </tr>
+                </thead>
+                <!-- 更改：PARKS 计分项已根据规则更新 -->
+                <tbody>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🌲公园总分</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🧑个人目标</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🖼️照片总分</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">📷照片奖励</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">📅季节奖励</td>
+                    </tr>
+                    <tr class="border-b border-gray-200">
+                        <td class="p-4 text-sm font-medium sticky left-0 bg-white/75 backdrop-blur-sm">🎖️起始玩家</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr id="parks-total-row"> <!-- JS 会应用主题 -->
+                        <td class="p-4 text-sm font-bold sticky left-0 z-10">
+                            <span class="total-text-placeholder text-orange-900">👑 总分</span>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </section>
+
+
+    <!-- 4. 底部提示 -->
+    <footer class="text-center p-6 text-gray-500 text-sm">
+        <p>祝您游戏愉快！</p>
+        <!-- 更改：添加 PARKS 平局规则 -->
+        <p class="mt-1">Wingspan平局提示：平局时，剩余食物最多者获胜。</p>
+    </footer>
+
+    <!-- 5. JavaScript 逻辑 (无功能性更改，它会自动适配新的行) -->
     <script>
-        // 获取HTML中的元素
-        const video = document.getElementById('webcam');
-        const canvas = document.getElementById('canvas');
-        const context = canvas.getContext('2d');
-        const countDisplay = document.getElementById('count');
-        const loadingMessage = document.getElementById('loading-message');
-        const resetButton = document.getElementById('resetButton'); 
-
-        // ✨ 按钮
-        const reportButton = document.getElementById('reportButton');
-        
-        // ✨ Modal 元素
-        const modalOverlay = document.getElementById('modal-overlay');
-        const geminiModal = document.getElementById('gemini-modal');
-        const closeModalButton = document.getElementById('close-modal-button');
-        const chartIntervalSelect = document.getElementById('chartIntervalSelect'); // ✨ 模态框内的下拉框
-        
-        // ✨ 翻转按钮
-        const flipButton = document.getElementById('flipButton');
-        // ✨ intervalSelect 已从这里移除
-
-        let model = null; 
-        let detectionTimeoutId = null; 
-        const DETECTION_INTERVAL = 100; // 100毫秒 = 10 FPS
-
-        // --- 跟踪器变量 ---
-        let cumulativeCount = 0;    
-        let nextPersonId = 1;       
-        let trackedPeople = []; 
-        let sessionStartTime = null; 
-        
-        // --- ✨ 摄像头状态变量 ---
-        let currentFacingMode = 'environment'; // 默认使用后置
-        let currentStream = null; // 存储当前的视频流
-
-        const RELATIVE_MATCH_THRESHOLD = 0.8; 
-        const MAX_FRAMES_UNSEEN = 100; // 100 帧 (10 秒)
-        
-        // --- ✨ 图表数据相关变量 ---
-        const BASE_LOG_INTERVAL = 60000; // ✨ 关键：数据记录基础间隔 (1 分钟)
-        let flowData = []; // 存储 { timestamp: Date, flow: int }
-        let lastLoggedCount = 0;
-        let dataLoggerInterval = null;
-        let chartInstance = null; // 存储 Chart.js 实例
-
-        // --- ✨ Modal 控制函数 (不变) ---
-        function showModal() {
-            modalOverlay.classList.remove('modal-hidden');
-            geminiModal.classList.remove('modal-hidden');
-        }
-
-        function hideModal() {
-            modalOverlay.classList.add('modal-hidden');
-            geminiModal.classList.add('modal-hidden'); 
-            // 销毁图表实例以释放资源
-            if (chartInstance) {
-                chartInstance.destroy();
-                chartInstance = null;
-            }
-        }
-        
-        // --- ✨ 会话时长函数 (不变) ---
-        function getSessionDuration() {
-            if (!sessionStartTime) return "0 秒";
-            const diff = new Date() - sessionStartTime;
-            const seconds = Math.floor((diff / 1000) % 60);
-            const minutes = Math.floor((diff / (1000 * 60)) % 60);
-            const hours = Math.floor((diff / (1000 * 60 * 60)));
-            let durationStr = "";
-            if (hours > 0) durationStr += `${hours} 小时 `;
-            if (minutes > 0) durationStr += `${minutes} 分钟 `;
-            if (seconds > 0 || durationStr === "") durationStr += `${seconds} 秒`;
-            return durationStr.trim();
-        }
-
-        // --- 辅助函数 (不变) ---
-        function getBoxCenter(box) {
-            return {
-                x: box[0] + box[2] / 2,
-                y: box[1] + box[3] / 2
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- WINGSPAN 配置 ---
+            const wsConfig = {
+                tableId: 'wingspan-score-table',
+                addPlayerBtnId: 'ws-add-player',
+                resetGameBtnId: 'ws-reset-game',
+                playerNameRowId: 'ws-player-name-row',
+                removeRowId: 'ws-remove-row',
+                totalRowId: 'ws-total-row',
+                defaultPlayerPrefix: '玩家',
+                theme: {
+                    playerRow: 'bg-cyan-100',
+                    playerRowSticky: 'bg-cyan-100/75',
+                    totalRow: 'bg-amber-100',
+                    totalRowSticky: 'bg-amber-100/75',
+                    totalText: 'text-amber-900',
+                    winnerCol: 'winner-col-ws'
+                }
             };
-        }
-        function getCenterDistance(center1, center2) {
-            const dx = center1.x - center2.x;
-            const dy = center1.y - center2.y;
-            return Math.sqrt(dx * dx + dy * dy);
-        }
-        function drawBoundingBox(box, personId, score) {
-            const [x, y, width, height] = box;
-            context.strokeStyle = '#00FFFF'; 
-            context.lineWidth = 2;
-            context.strokeRect(x, y, width, height); 
-            
-            context.fillStyle = '#00FFFF';
-            context.font = '16px Arial';
-            const label = `ID:${personId} (${Math.round(score * 100)}%)`;
-            
-            const textX = x;
-            const textY = y > 16 ? y - 5 : 16;
-            
-            context.save(); 
-            if (currentFacingMode === 'user') {
-                const textWidth = context.measureText(label).width;
-                context.translate(textX + (textWidth / 2), textY);
-                context.scale(-1, 1);
-                context.textAlign = "center";
-                context.fillText(label, 0, 0);
-            } else {
-                context.textAlign = "left";
-                context.fillText(label, textX, textY); 
-            }
-            context.restore(); 
-        }
 
-        // --- 核心检测逻辑 (不变) ---
-        async function runDetection() {
-            if (!model || !video.HAVE_ENOUGH_DATA) {
-                detectionTimeoutId = setTimeout(runDetection, DETECTION_INTERVAL);
-                return;
-            }
-            const predictions = await model.detect(video);
-            context.clearRect(0, 0, canvas.width, canvas.height);
-            let currentFramePeople = []; 
-            for (let prediction of predictions) {
-                if (prediction.class === 'person' && prediction.score > 0.5) { 
-                    currentFramePeople.push({
-                        box: prediction.bbox,
-                        score: prediction.score,
-                        center: getBoxCenter(prediction.bbox)
-                    });
+            // --- PARKS 配置 ---
+            const parksConfig = {
+                tableId: 'parks-score-table',
+                addPlayerBtnId: 'parks-add-player',
+                resetGameBtnId: 'parks-reset-game',
+                playerNameRowId: 'parks-player-name-row',
+                removeRowId: 'parks-remove-row',
+                totalRowId: 'parks-total-row',
+                defaultPlayerPrefix: 'Hiker',
+                theme: {
+                    playerRow: 'bg-green-100', // 森林
+                    playerRowSticky: 'bg-green-100/75',
+                    totalRow: 'bg-orange-100', // 日落
+                    totalRowSticky: 'bg-orange-100/75',
+                    totalText: 'text-orange-900',
+                    winnerCol: 'winner-col-parks'
                 }
-            }
-            let newTrackedPeople = []; 
-            let matchedCurrentFrameIndices = new Set(); 
-            for (let i = 0; i < trackedPeople.length; i++) {
-                const trackedPerson = trackedPeople[i];
-                let bestMatch = { index: -1, distance: Infinity };
-                for (let j = 0; j < currentFramePeople.length; j++) {
-                    if (matchedCurrentFrameIndices.has(j)) continue; 
-                    const currentPerson = currentFramePeople[j];
-                    const distance = getCenterDistance(currentPerson.center, trackedPerson.lastSeenCenter);
-                    if (distance < bestMatch.distance) {
-                        bestMatch = { index: j, distance: distance };
-                    }
-                }
-                const personSize = (trackedPerson.lastSeenBox[2] + trackedPerson.lastSeenBox[3]) / 2;
-                const MATCH_THRESHOLD = personSize * RELATIVE_MATCH_THRESHOLD;
-                if (bestMatch.index !== -1 && bestMatch.distance < MATCH_THRESHOLD) {
-                    const matchedCurrentPerson = currentFramePeople[bestMatch.index];
-                    trackedPerson.lastSeenBox = matchedCurrentPerson.box;
-                    trackedPerson.lastSeenCenter = matchedCurrentPerson.center;
-                    trackedPerson.score = matchedCurrentPerson.score;
-                    trackedPerson.framesUnseen = 0; 
-                    newTrackedPeople.push(trackedPerson); 
-                    matchedCurrentFrameIndices.add(bestMatch.index); 
-                } else {
-                    trackedPerson.framesUnseen++;
-                    if (trackedPerson.framesUnseen < MAX_FRAMES_UNSEEN) {
-                        newTrackedPeople.push(trackedPerson); 
-                    }
-                }
-            }
-            for (let i = 0; i < currentFramePeople.length; i++) {
-                if (!matchedCurrentFrameIndices.has(i)) {
-                    const newPerson = currentFramePeople[i];
-                    cumulativeCount++; 
-                    newTrackedPeople.push({
-                        id: nextPersonId++, 
-                        lastSeenBox: newPerson.box,
-                        lastSeenCenter: newPerson.center,
-                        score: newPerson.score,
-                        framesUnseen: 0 
-                    });
-                }
-            }
-            trackedPeople = newTrackedPeople;
-            for (const person of trackedPeople) {
-                if (person.framesUnseen === 0) {
-                     drawBoundingBox(person.lastSeenBox, person.id, person.score);
-                }
-            }
-            countDisplay.innerText = `累计人数: ${cumulativeCount}`;
-            detectionTimeoutId = setTimeout(runDetection, DETECTION_INTERVAL);
-        }
+            };
 
-        function stopDetection() {
-            if (detectionTimeoutId) {
-                clearTimeout(detectionTimeoutId);
-                detectionTimeoutId = null;
-            }
-        }
+            /**
+             * 核心函数：初始化一个计分表
+             * @param {object} config - 包含所有 ID 和主题配置的对象
+             */
+            function initializeScoreTable(config) {
+                const table = document.getElementById(config.tableId);
+                if (!table) return; // 如果找不到表格，则退出
 
-        // --- ✨ 数据记录器功能 (已更新) ---
-        function logData() {
-            const currentFlow = cumulativeCount - lastLoggedCount;
-            flowData.push({ 
-                timestamp: new Date(), 
-                flow: currentFlow 
-            });
-            lastLoggedCount = cumulativeCount;
-            console.log('已记录人流数据(每1分钟):', flowData[flowData.length - 1]);
-        }
-
-        function startDataLogger() {
-            if (dataLoggerInterval) clearInterval(dataLoggerInterval);
-            flowData = [];
-            lastLoggedCount = 0;
-            
-            console.log(`数据记录器已启动，每 1 分钟记录一次。`);
-            // ✨ 始终使用基础间隔 (1 分钟)
-            dataLoggerInterval = setInterval(logData, BASE_LOG_INTERVAL);
-        }
-
-        function stopDataLogger() {
-            if (dataLoggerInterval) clearInterval(dataLoggerInterval);
-            dataLoggerInterval = null;
-            console.log('数据记录器已停止。');
-        } 
-        
-        // --- ✨ 新增：图表数据聚合函数 ---
-        // 此函数获取1分钟的原始数据，并按需聚合成更大的时间块
-        function aggregateData(targetIntervalMs) {
-            // e.g., "每5分钟" (300000) / "每1分钟" (60000) = 5
-            // 这意味着我们要把 5 个数据点合并成 1 个
-            const aggregationFactor = targetIntervalMs / BASE_LOG_INTERVAL;
-
-            if (flowData.length === 0) {
-                return { labels: [], data: [] };
-            }
-            
-            // 确保 aggregationFactor 是整数, 尽管在这个应用里它总是
-            if (aggregationFactor < 1) {
-                 console.warn("聚合间隔小于基础间隔");
-                 return { labels: [], data: [] };
-            }
-
-            let aggregatedFlow = [];
-            let aggregatedLabels = [];
-            let currentFlowSum = 0;
-            let lastTimestamp = null;
-
-            for (let i = 0; i < flowData.length; i++) {
-                currentFlowSum += flowData[i].flow;
-                lastTimestamp = flowData[i].timestamp;
+                const theadRow = document.getElementById(config.playerNameRowId);
                 
-                // (i + 1) % aggregationFactor === 0  => 例如, factor=5, 那么在 i=4 (第5个) 时触发
-                // OR 如果这是最后一个数据点 (为了推送剩余的数据)
-                if ((i + 1) % aggregationFactor === 0 || i === flowData.length - 1) {
-                    aggregatedFlow.push(currentFlowSum);
-                    aggregatedLabels.push(lastTimestamp.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
-                    currentFlowSum = 0; // 重置总和
+                // 修复：在这里定义所有内部变量
+                const theadRemoveRow = document.getElementById(config.removeRowId);
+                const tbodyRows = table.querySelectorAll('tbody tr');
+                const tfootTotalRow = document.getElementById(config.totalRowId);
+                const addPlayerBtn = document.getElementById(config.addPlayerBtnId);
+                const resetGameBtn = document.getElementById(config.resetGameBtnId);
+                
+                let playerCount = 0;
+                const WINNER_CLASS = config.theme.winnerCol;
+
+                // --- 动态应用主题 ---
+                theadRow.classList.add(config.theme.playerRow);
+                theadRow.querySelector('th').classList.add(config.theme.playerRowSticky);
+                tfootTotalRow.classList.add(config.theme.totalRow);
+                tfootTotalRow.querySelector('td').classList.add(config.theme.totalRowSticky);
+                tfootTotalRow.querySelector('.total-text-placeholder').classList.add(config.theme.totalText);
+
+                
+                /**
+                 * 添加一个新玩家 (一整列)
+                 */
+                function robustAddPlayer() {
+                    playerCount++;
+                    
+                    // 1. 添加表头 (玩家名字)
+                    const th = document.createElement('th');
+                    th.className = 'p-2';
+                    const playerNameInput = document.createElement('input');
+                    playerNameInput.type = 'text';
+                    playerNameInput.value = `${config.defaultPlayerPrefix} ${playerCount}`;
+                    playerNameInput.className = 'player-name-input';
+                    
+                    playerNameInput.addEventListener('focus', function() {
+                        this.setAttribute('data-placeholder', this.value);
+                        this.value = '';
+                    });
+                    playerNameInput.addEventListener('blur', function() {
+                        if (this.value.trim() === '') {
+                            this.value = this.getAttribute('data-placeholder');
+                        }
+                        this.removeAttribute('data-placeholder');
+                    });
+                    th.appendChild(playerNameInput);
+                    theadRow.appendChild(th);
+
+                    // 2. 为每个计分项添加输入框 (tbody)
+                    // (此代码会自动查找所有 tbody tr, 包括我们新加的行)
+                    tbodyRows.forEach(row => {
+                        const td = document.createElement('td');
+                        td.className = 'p-2 text-center';
+                        const input = document.createElement('input');
+                        input.type = 'number';
+                        input.min = '0';
+                        input.value = '0';
+                        input.className = 'score-input table-input';
+                        input.addEventListener('input', (e) => robustUpdateScore(e.target));
+                        input.addEventListener('wheel', (e) => {
+                            e.preventDefault();
+                            let value = parseInt(input.value) || 0;
+                            if (e.deltaY < 0) value++; else value--;
+                            input.value = Math.max(0, value);
+                            robustUpdateScore(e.target);
+                        });
+                        input.addEventListener('focus', function() {
+                            if (this.value === '0') this.value = '';
+                            else this.select();
+                        });
+                        input.addEventListener('blur', function() {
+                            if (this.value.trim() === '') this.value = '0';
+                            robustUpdateScore(this);
+                        });
+                        td.appendChild(input);
+                        row.appendChild(td);
+                    });
+
+                    // 3. 添加总分单元格 (tfoot)
+                    const totalTd = document.createElement('td');
+                    totalTd.className = 'p-3 text-center';
+                    totalTd.innerHTML = `<span class="total-score text-4xl font-black ${config.theme.totalText}">0</span>`;
+                    tfootTotalRow.appendChild(totalTd);
+
+                    // 4. 添加移除按钮单元格 (thead)
+                    const removeTh = document.createElement('th');
+                    removeTh.className = 'p-3 text-center';
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-player text-red-500 hover:text-red-700 font-bold text-2xl transition-colors';
+                    removeBtn.title = '移除玩家';
+                    removeBtn.innerHTML = '&times;';
+                    removeBtn.addEventListener('click', (e) => robustRemovePlayer(e.target));
+                    removeTh.appendChild(removeBtn);
+                    theadRemoveRow.appendChild(removeTh);
+
+                    highlightWinners();
                 }
-            }
-            
-            return { labels: aggregatedLabels, data: aggregatedFlow };
-        }
 
-        
-        // --- ✨ 新增：图表渲染函数 (替代旧的 showChartModal 逻辑) ---
-        function renderChart() {
-            // 获取HTML元素
-            const chartCanvas = document.getElementById('chart-canvas');
-            const noDataText = document.getElementById('chart-no-data');
-            
-            // 从模态框下拉菜单获取当前值
-            const selectedIntervalMs = parseInt(chartIntervalSelect.value, 10);
-            const selectedIntervalText = chartIntervalSelect.options[chartIntervalSelect.selectedIndex].text;
-
-            // 更新模态框标题
-            document.getElementById('chart-modal-title').innerText = `人流图表 (${selectedIntervalText})`;
-
-            // 先销毁旧实例
-            if (chartInstance) {
-                chartInstance.destroy();
-                chartInstance = null;
-            }
-
-            // ✨ 调用新的聚合器
-            const { labels, data } = aggregateData(selectedIntervalMs);
-
-            // 检查是否有数据
-            if (data.length === 0) {
-                noDataText.classList.remove('modal-hidden'); 
-                chartCanvas.classList.add('modal-hidden'); 
-                return; // 没有数据，不渲染
-            }
-
-            noDataText.classList.add('modal-hidden'); 
-            chartCanvas.classList.remove('modal-hidden'); 
-
-            requestAnimationFrame(() => {
-                const ctx = chartCanvas.getContext('2d');
-                chartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: `每 ${selectedIntervalText.replace('每', '')} 新增人流`,
-                            data: data,
-                            fill: true,
-                            backgroundColor: 'rgba(0, 123, 255, 0.2)',
-                            borderColor: 'rgba(0, 123, 255, 1)',
-                            borderWidth: 2,
-                            tension: 0.1 
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                title: {
-                                    display: true,
-                                    text: '新增人数'
-                                },
-                                ticks: {
-                                    stepSize: 1 
-                                }
-                            },
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: '时间点 (周期结束时)'
-                                }
+                /**
+                 * 移除一个玩家 (一整列)
+                 */
+                function robustRemovePlayer(button) {
+                    const colIndex = button.closest('th').cellIndex;
+                    if (colIndex > 0) {
+                        table.querySelectorAll('tr').forEach(row => {
+                            if (row.children[colIndex]) {
+                                row.removeChild(row.children[colIndex]);
                             }
+                        });
+                        highlightWinners();
+                    }
+                }
+                
+                /**
+                 * 更新一个玩家的总分
+                 */
+                function robustUpdateScore(input) {
+                    const colIndex = input.closest('td').cellIndex;
+                    if (colIndex > 0) {
+                        let total = 0;
+                        tbodyRows.forEach(row => {
+                            const cell = row.children[colIndex];
+                            if (cell) {
+                                const scoreInput = cell.querySelector('.score-input');
+                                total += parseInt(scoreInput.value) || 0;
+                            }
+                        });
+
+                        const totalCell = tfootTotalRow.children[colIndex];
+                        if (totalCell) {
+                            totalCell.querySelector('.total-score').textContent = total;
+                        }
+                        highlightWinners();
+                    }
+                }
+
+                /**
+                 * 高亮显示得分最高的玩家列
+                 */
+                function highlightWinners() {
+                    const totalCells = tfootTotalRow.querySelectorAll('td');
+                    let maxScore = -1;
+                    const scores = [];
+
+                    if (totalCells.length <= 1) return;
+
+                    for (let i = 1; i < totalCells.length; i++) {
+                        const total = parseInt(totalCells[i].textContent) || 0;
+                        scores.push(total);
+                        if (total > maxScore) maxScore = total;
+                    }
+                    
+                    const effectiveMaxScore = maxScore > 0 ? maxScore : -1;
+
+                    scores.forEach((score, index) => {
+                        const colIndex = index + 1;
+                        if (score === effectiveMaxScore) {
+                            table.querySelectorAll('tr').forEach(row => {
+                                if(row.children[colIndex]) row.children[colIndex].classList.add(WINNER_CLASS);
+                            });
+                        } else {
+                            table.querySelectorAll('tr').forEach(row => {
+                                if(row.children[colIndex]) row.children[colIndex].classList.remove(WINNER_CLASS);
+                            });
+                        }
+                    });
+                }
+
+                /**
+                 * 重置游戏分数 (保留玩家名字)
+                 */
+                function robustResetGame() {
+                    const numPlayerCols = theadRow.children.length - 1;
+                    
+                    for (let colIndex = 1; colIndex <= numPlayerCols; colIndex++) {
+                        tbodyRows.forEach(row => {
+                            const cell = row.children[colIndex];
+                            if (cell) {
+                                const input = cell.querySelector('.score-input');
+                                if (input) input.value = '0';
+                            }
+                        });
+                        
+                        const totalCell = tfootTotalRow.children[colIndex];
+                        if (totalCell) {
+                            totalCell.querySelector('.total-score').textContent = '0';
                         }
                     }
-                });
-            });
-        }
+                    highlightWinners();
+                }
 
+                // --- 初始化此表格 ---
+                addPlayerBtn.addEventListener('click', robustAddPlayer);
+                resetGameBtn.addEventListener('click', robustResetGame);
 
-        // --- ✨ 重置跟踪器状态的函数 (不变) ---
-        function resetTrackerState() {
-            cumulativeCount = 0;
-            nextPersonId = 1;       
-            trackedPeople = [];     
-            sessionStartTime = new Date(); 
-            countDisplay.innerText = `累计人数: ${cumulativeCount}`;
-            context.clearRect(0, 0, canvas.width, canvas.height); 
-            
-            // 重置数据记录器 (将使用1分钟的基础间隔)
-            stopDataLogger();
-            startDataLogger();
-        }
-
-        // --- ✨ 启动摄像头的函数 (不变) ---
-        async function startCamera(facingMode) {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
+                // 游戏开始时默认添加 2 个玩家
+                robustAddPlayer();
+                robustAddPlayer();
             }
-            currentFacingMode = facingMode; 
-            const constraints = { 
-                video: { 
-                    facingMode: currentFacingMode,
-                    width: { ideal: 640 }, 
-                    height: { ideal: 480 },
-                    maxWidth: 640,
-                    maxHeight: 480
-                },
-                audio: false 
-            };
-            
-            if (currentFacingMode === 'user') {
-                video.style.transform = "scaleX(-1)";
-                canvas.classList.add("mirrored");
-            } else {
-                video.style.transform = "scaleX(1)";
-                canvas.classList.remove("mirrored");
-            }
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                currentStream = stream; 
-                video.srcObject = stream;
-                return new Promise((resolve, reject) => {
-                    video.onloadedmetadata = () => {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        console.log(`摄像头已启动 (${currentFacingMode}): ${video.videoWidth}x${video.videoHeight}`);
-                        resolve(true);
-                    };
-                    video.onerror = (e) => {
-                        console.error("视频元素错误:", e);
-                        reject(new Error("视频加载流失败。"));
-                    };
-                });
-            } catch (error) {
-                console.error("getUserMedia 错误:", error);
-                loadingMessage.innerText = `错误: ${error.message}`;
-                throw error; 
-            }
-        }
 
-        // --- 主启动函数 (不变) ---
-        async function main() {
-            try {
-                console.log('正在加载模型...');
-                model = await cocoSsd.load();
-                console.log('模型加载完毕。');
-                loadingMessage.innerText = '模型加载完毕...';
-
-                await startCamera(currentFacingMode); 
-                
-                loadingMessage.style.display = 'none'; 
-                countDisplay.style.display = 'block'; 
-                document.getElementById('controls-overlay').style.display = 'flex';
-                
-                sessionStartTime = new Date(); 
-                startDataLogger(); // ✨ 启动数据记录器 (将使用1分钟的基础间隔)
-                runDetection(); 
-                
-            } catch (error) {
-                console.error('初始化失败:', error);
-            }
-        }
-
-        // 启动程序
-        main();
-
-        // --- ✨ 事件监听器 (已更新) ---
-
-        // 关闭模态框
-        closeModalButton.addEventListener('click', hideModal);
-        modalOverlay.addEventListener('click', (e) => {
-            if (e.target === modalOverlay) {
-                hideModal();
-            }
+            // --- 启动两个计分器 ---
+            initializeScoreTable(wsConfig);
+            initializeScoreTable(parksConfig);
         });
-
-        // 重置按钮
-        resetButton.addEventListener('click', () => {
-            console.log('计数已重置');
-            stopDetection(); 
-            resetTrackerState(); 
-            runDetection(); 
-        });
-        
-        // 翻转摄像头按钮
-        flipButton.addEventListener('click', async () => {
-            console.log('正在翻转摄像头...');
-            stopDetection(); 
-            stopDataLogger(); 
-
-            loadingMessage.innerText = '正在翻转镜头...';
-            loadingMessage.style.display = 'block';
-            countDisplay.style.display = 'none';
-            document.getElementById('controls-overlay').style.display = 'none';
-            
-            try {
-                const newFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
-                await startCamera(newFacingMode); // ✨ 修复了拼写错误 (newFacingBode -> newFacingMode)
-                
-                resetTrackerState(); 
-                
-                loadingMessage.style.display = 'none';
-                countDisplay.style.display = 'block';
-                document.getElementById('controls-overlay').style.display = 'flex';
-
-                runDetection(); 
-                
-            } catch (error) {
-                console.error('翻转摄像头失败:', error);
-                loadingMessage.innerText = `翻转失败: ${error.message}`;
-                document.getElementById('controls-overlay').style.display = 'flex';
-            }
-        });
-
-        // "生成图表" 按钮
-        reportButton.addEventListener('click', () => {
-            showModal(); // 弹出空白模态框
-            
-            // ✨ 设置默认选项为 5 分钟
-            chartIntervalSelect.value = "300000"; // 5 minutes
-            
-            // ✨ 渲染默认图表
-            renderChart(); 
-        });
-
-        // ✨ 新增：监听模态框内部下拉菜单的变化
-        chartIntervalSelect.addEventListener('change', () => {
-            renderChart(); // ✨ 重新渲染图表
-        });
-
-        // 旋转处理 (不变)
-        const resizeObserver = new ResizeObserver(() => {
-            if (video.videoWidth > 0 && 
-                (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight)) {
-                console.log(`检测到旋转/调整大小。重设画布分辨率为: ${video.videoWidth}x${video.videoHeight}`);
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-            }
-        });
-        resizeObserver.observe(video);
     </script>
+
 </body>
 </html>
