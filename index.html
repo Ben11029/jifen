@@ -63,6 +63,18 @@
             border-color: #3B82F6; /* blue-500 */
             outline: none;
         }
+
+        /* 移动端优化 */
+        @media (max-width: 640px) {
+            .table-input {
+                width: 50px;
+                font-size: 0.875rem;
+            }
+            .player-name-input {
+                width: 50px;
+                font-size: 0.875rem;
+            }
+        }
     </style>
 </head>
 <body class="bg-stone-100 min-h-screen"> <!-- 更改：更自然的背景色 -->
@@ -316,7 +328,10 @@
                         input.min = '0';
                         input.value = '0';
                         input.className = 'score-input table-input';
-                        input.addEventListener('input', (e) => robustUpdateScore(e.target));
+                        input.addEventListener('input', (e) => {
+                            robustUpdateScore(e.target);
+                            saveGameState(); // 添加这行
+                        });
                         input.addEventListener('wheel', (e) => {
                             e.preventDefault();
                             let value = parseInt(input.value) || 0;
@@ -331,6 +346,27 @@
                         input.addEventListener('blur', function() {
                             if (this.value.trim() === '') this.value = '0';
                             robustUpdateScore(this);
+                        });
+                        // 新增：处理 Enter 和 ArrowDown 键
+                        input.addEventListener('keydown', (e) => {
+                            if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                // 跳转到下一个输入框
+                                const currentRow = input.closest('tr');
+                                const nextRow = currentRow.nextElementSibling;
+                                if (nextRow) {
+                                    const nextInput = nextRow.children[input.closest('td').cellIndex]?.querySelector('.score-input');
+                                    if (nextInput) nextInput.focus();
+                                }
+                            } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                const currentRow = input.closest('tr');
+                                const prevRow = currentRow.previousElementSibling;
+                                if (prevRow) {
+                                    const prevInput = prevRow.children[input.closest('td').cellIndex]?.querySelector('.score-input');
+                                    if (prevInput) prevInput.focus();
+                                }
+                            }
                         });
                         td.appendChild(input);
                         row.appendChild(td);
@@ -449,9 +485,77 @@
                     highlightWinners();
                 }
 
+                // --- 保存游戏状态 ---
+                function saveGameState() {
+                    const state = {
+                        playerCount,
+                        players: [],
+                        scores: []
+                    };
+                    
+                    // 保存玩家名字
+                    theadRow.querySelectorAll('input').forEach(input => {
+                        state.players.push(input.value);
+                    });
+                    
+                    // 保存分数
+                    tbodyRows.forEach(row => {
+                        const rowScores = [];
+                        row.querySelectorAll('.score-input').forEach(input => {
+                            rowScores.push(input.value);
+                        });
+                        state.scores.push(rowScores);
+                    });
+                    
+                    localStorage.setItem(`game_${config.tableId}`, JSON.stringify(state));
+                }
+
+                function loadGameState() {
+                    const saved = localStorage.getItem(`game_${config.tableId}`);
+                    if (saved) {
+                        const state = JSON.parse(saved);
+                        playerCount = state.playerCount;
+                        
+                        // 清除现有玩家
+                        while (theadRow.children.length > 1) {
+                            robustRemovePlayer(theadRemoveRow.children[1].querySelector('button'));
+                        }
+                        
+                        // 恢复玩家
+                        for (let i = 0; i < state.players.length; i++) {
+                            robustAddPlayer();
+                            theadRow.children[i + 1].querySelector('input').value = state.players[i];
+                        }
+                        
+                        // 恢复分数
+                        state.scores.forEach((rowScores, rowIndex) => {
+                            rowScores.forEach((score, colIndex) => {
+                                const input = tbodyRows[rowIndex].children[colIndex + 1]?.querySelector('.score-input');
+                                if (input) {
+                                    input.value = score;
+                                    robustUpdateScore(input);
+                                }
+                            });
+                        });
+                    }
+                }
+
                 // --- 初始化此表格 ---
-                addPlayerBtn.addEventListener('click', robustAddPlayer);
-                resetGameBtn.addEventListener('click', robustResetGame);
+                loadGameState(); // 先加载状态
+                if (theadRow.children.length === 1) {
+                    // 如果没有保存的数据，添加默认玩家
+                    robustAddPlayer();
+                    robustAddPlayer();
+                }
+
+                addPlayerBtn.addEventListener('click', () => {
+                    robustAddPlayer();
+                    saveGameState();
+                });
+                resetGameBtn.addEventListener('click', () => {
+                    robustResetGame();
+                    saveGameState();
+                });
 
                 // 游戏开始时默认添加 2 个玩家
                 robustAddPlayer();
