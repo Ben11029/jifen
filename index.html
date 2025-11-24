@@ -338,6 +338,7 @@
                             if (e.deltaY < 0) value++; else value--;
                             input.value = Math.max(0, value);
                             robustUpdateScore(e.target);
+                            saveGameState(); // 更改：滚轮调整后保存状态
                         });
                         input.addEventListener('focus', function() {
                             if (this.value === '0') this.value = '';
@@ -346,6 +347,7 @@
                         input.addEventListener('blur', function() {
                             if (this.value.trim() === '') this.value = '0';
                             robustUpdateScore(this);
+                            saveGameState(); // 更改：失去焦点后保存状态
                         });
                         // 新增：处理 Enter 和 ArrowDown 键
                         input.addEventListener('keydown', (e) => {
@@ -385,7 +387,11 @@
                     removeBtn.className = 'remove-player text-red-500 hover:text-red-700 font-bold text-2xl transition-colors';
                     removeBtn.title = '移除玩家';
                     removeBtn.innerHTML = '&times;';
-                    removeBtn.addEventListener('click', (e) => robustRemovePlayer(e.target));
+                    // 更改：移除玩家时保存状态
+                    removeBtn.addEventListener('click', (e) => {
+                        robustRemovePlayer(e.target);
+                        saveGameState();
+                    });
                     removeTh.appendChild(removeBtn);
                     theadRemoveRow.appendChild(removeTh);
 
@@ -514,7 +520,8 @@
                     const saved = localStorage.getItem(`game_${config.tableId}`);
                     if (saved) {
                         const state = JSON.parse(saved);
-                        playerCount = state.playerCount;
+                        // 更改：重置计数器，因为 robustAddPlayer 会重新增加它
+                        playerCount = 0; 
                         
                         // 清除现有玩家
                         while (theadRow.children.length > 1) {
@@ -557,9 +564,7 @@
                     saveGameState();
                 });
 
-                // 游戏开始时默认添加 2 个玩家
-                robustAddPlayer();
-                robustAddPlayer();
+                // 更改：移除了此处多余的 robustAddPlayer() 调用，防止刷新后玩家翻倍
             }
 
             // --- 启动两个计分器 ---
@@ -567,6 +572,5 @@
             initializeScoreTable(parksConfig);
         });
     </script>
-
 </body>
 </html>
