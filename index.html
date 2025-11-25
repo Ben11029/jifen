@@ -85,7 +85,7 @@
             <h1 class="text-2xl font-bold text-teal-800">
                 🎲 桌游计分器
                 <br>
-                <span class="text-sm font-normal text-gray-600">Wingspan + Parks 2</span>
+                <span class="text-base font-normal text-gray-600">Wingspan + Parks 2</span>
             </h1>
             <!-- 移除了全局的添加/重置按钮 -->
         </div>
@@ -148,6 +148,12 @@
                     </tr>
                 </tfoot>
             </table>
+        </div>
+        <!-- Wingspan 播报按钮 -->
+        <div class="flex justify-end mt-4">
+            <button id="ws-announce-winner" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all hover:scale-105">
+                🎉 播报获胜者
+            </button>
         </div>
     </section>
 
@@ -213,6 +219,12 @@
                 </tfoot>
             </table>
         </div>
+        <!-- PARKS 播报按钮 -->
+        <div class="flex justify-end mt-4">
+            <button id="parks-announce-winner" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all hover:scale-105">
+                🎉 播报获胜者
+            </button>
+        </div>
     </section>
 
 
@@ -231,6 +243,7 @@
             const wsConfig = {
                 tableId: 'wingspan-score-table',
                 addPlayerBtnId: 'ws-add-player',
+                announceWinnerBtnId: 'ws-announce-winner',
                 resetGameBtnId: 'ws-reset-game',
                 playerNameRowId: 'ws-player-name-row',
                 removeRowId: 'ws-remove-row',
@@ -250,6 +263,7 @@
             const parksConfig = {
                 tableId: 'parks-score-table',
                 addPlayerBtnId: 'parks-add-player',
+                announceWinnerBtnId: 'parks-announce-winner',
                 resetGameBtnId: 'parks-reset-game',
                 playerNameRowId: 'parks-player-name-row',
                 removeRowId: 'parks-remove-row',
@@ -271,19 +285,21 @@
              */
             function initializeScoreTable(config) {
                 const table = document.getElementById(config.tableId);
-                if (!table) return; // 如果找不到表格，则退出
+                if (!table) return;
 
                 const theadRow = document.getElementById(config.playerNameRowId);
-                
-                // 修复：在这里定义所有内部变量
                 const theadRemoveRow = document.getElementById(config.removeRowId);
                 const tbodyRows = table.querySelectorAll('tbody tr');
                 const tfootTotalRow = document.getElementById(config.totalRowId);
                 const addPlayerBtn = document.getElementById(config.addPlayerBtnId);
+                const announceWinnerBtn = document.getElementById(config.announceWinnerBtnId);
                 const resetGameBtn = document.getElementById(config.resetGameBtnId);
                 
                 let playerCount = 0;
                 const WINNER_CLASS = config.theme.winnerCol;
+                
+                // 新增：为每个表格创建独立的音乐播放标记
+                let isMusicPlaying = false;
 
                 // --- 动态应用主题 ---
                 theadRow.classList.add(config.theme.playerRow);
@@ -297,14 +313,14 @@
                  * 添加一个新玩家 (一整列)
                  */
                 function robustAddPlayer() {
-                    playerCount++;
+                    const playerNum = getNextPlayerNumber();
                     
                     // 1. 添加表头 (玩家名字)
                     const th = document.createElement('th');
                     th.className = 'p-2';
                     const playerNameInput = document.createElement('input');
                     playerNameInput.type = 'text';
-                    playerNameInput.value = `${config.defaultPlayerPrefix} ${playerCount}`;
+                    playerNameInput.value = `${config.defaultPlayerPrefix} ${playerNum}`;
                     playerNameInput.className = 'player-name-input';
                     
                     playerNameInput.addEventListener('focus', function() {
@@ -456,6 +472,9 @@
                     
                     const effectiveMaxScore = maxScore > 0 ? maxScore : -1;
 
+                    // 新增：收集获胜者名字
+                    const winners = [];
+
                     scores.forEach((score, index) => {
                         const colIndex = index + 1;
                         if (score === effectiveMaxScore) {
@@ -471,8 +490,183 @@
                 }
 
                 /**
-                 * 重置游戏分数 (保留玩家名字)
+                 * 获取当前获胜者列表
                  */
+                function getWinners() {
+                    const totalCells = tfootTotalRow.querySelectorAll('td');
+                    let maxScore = -1;
+                    const winners = [];
+
+                    if (totalCells.length <= 1) return winners;
+
+                    for (let i = 1; i < totalCells.length; i++) {
+                        const total = parseInt(totalCells[i].textContent) || 0;
+                        if (total > maxScore) maxScore = total;
+                    }
+                    
+                    if (maxScore <= 0) return winners;
+
+                    for (let i = 1; i < totalCells.length; i++) {
+                        const total = parseInt(totalCells[i].textContent) || 0;
+                        if (total === maxScore) {
+                            const playerNameInput = theadRow.children[i]?.querySelector('input');
+                            if (playerNameInput) {
+                                winners.push(playerNameInput.value);
+                            }
+                        }
+                    }
+                    return winners;
+                }
+
+                /**
+                 * 新增：语音播报获胜者名字
+                 */
+                function announceWinners(winners) {
+                    // 使用局部变量而非全局变量
+                    if (isMusicPlaying || window.speechSynthesis.speaking) {
+                        window.speechSynthesis.cancel();
+                    }
+                    isMusicPlaying = true;
+
+                    let message = '';
+                    if (winners.length === 1) {
+                        message = `恭喜 ${winners[0]} 获得胜利！`;
+                    } else {
+                        const names = winners.join('、');
+                        message = `平局！恭喜 ${names} 并列第一！`;
+                    }
+
+                    const utterance = new SpeechSynthesisUtterance(message);
+                    utterance.lang = 'zh-CN';
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.1;
+                    utterance.volume = 0.8;
+
+                    // 修改：计算精确的播报时长
+                    let startTime = 0;
+                    utterance.onstart = () => {
+                        startTime = Date.now();
+                    };
+
+                    utterance.onend = () => {
+                        // 播报结束后立即播放音乐
+                        setTimeout(() => {
+                            playVictoryMusic();
+                        }, 200);
+                    };
+
+                    utterance.onerror = () => {
+                        // 如果播报出错，直接播放音乐
+                        playVictoryMusic();
+                    };
+
+                    window.speechSynthesis.speak(utterance);
+                }
+
+                /**
+                 * 新增：播放胜利庆祝音乐
+                 */
+                function playVictoryMusic() {
+                    // 防止重复播放
+                    if (isMusicPlaying === 'playing') return;
+                    isMusicPlaying = 'playing';
+                    
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const now = audioContext.currentTime;
+
+                    // 胜利旋律音符
+                    const melody = [
+                        { freq: 523.25, start: 0.0, duration: 0.15 },
+                        { freq: 587.33, start: 0.15, duration: 0.15 },
+                        { freq: 659.25, start: 0.3, duration: 0.15 },
+                        { freq: 698.46, start: 0.45, duration: 0.15 },
+                        { freq: 783.99, start: 0.6, duration: 0.2 },
+                        { freq: 783.99, start: 0.85, duration: 0.2 },
+                        { freq: 783.99, start: 1.1, duration: 0.3 },
+                        { freq: 659.25, start: 1.5, duration: 0.15 },
+                        { freq: 698.46, start: 1.65, duration: 0.15 },
+                        { freq: 783.99, start: 1.8, duration: 0.15 },
+                        { freq: 880.00, start: 1.95, duration: 0.2 },
+                        { freq: 783.99, start: 2.2, duration: 0.2 },
+                        { freq: 659.25, start: 2.45, duration: 0.2 },
+                        { freq: 523.25, start: 2.7, duration: 0.4 }
+                    ];
+
+                    melody.forEach(note => {
+                        const oscillator = audioContext.createOscillator();
+                        const gainNode = audioContext.createGain();
+
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+
+                        oscillator.frequency.value = note.freq;
+                        oscillator.type = 'sine';
+
+                        const attackTime = 0.02;
+                        const decayTime = 0.05;
+                        const sustainLevel = 0.3;
+                        const releaseTime = 0.1;
+
+                        const startTime = now + note.start;
+                        const endTime = startTime + note.duration;
+
+                        gainNode.gain.setValueAtTime(0, startTime);
+                        gainNode.gain.linearRampToValueAtTime(0.5, startTime + attackTime);
+                        gainNode.gain.linearRampToValueAtTime(sustainLevel, startTime + attackTime + decayTime);
+                        gainNode.gain.setValueAtTime(sustainLevel, endTime - releaseTime);
+                        gainNode.gain.linearRampToValueAtTime(0, endTime);
+
+                        oscillator.start(startTime);
+                        oscillator.stop(endTime);
+                    });
+
+                    const chord = [523.25, 659.25, 783.99];
+                    chord.forEach(freq => {
+                        const oscillator = audioContext.createOscillator();
+                        const gainNode = audioContext.createGain();
+
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+
+                        oscillator.frequency.value = freq;
+                        oscillator.type = 'triangle';
+
+                        const startTime = now + 2.7;
+                        const endTime = startTime + 0.8;
+
+                        gainNode.gain.setValueAtTime(0, startTime);
+                        gainNode.gain.linearRampToValueAtTime(0.15, startTime + 0.1);
+                        gainNode.gain.setValueAtTime(0.15, endTime - 0.2);
+                        gainNode.gain.linearRampToValueAtTime(0, endTime);
+
+                        oscillator.start(startTime);
+                        oscillator.stop(endTime);
+                    });
+                    
+                    // 重置标记，允许下次播放
+                    setTimeout(() => {
+                        isMusicPlaying = false;
+                    }, 3500);
+                }
+
+                // 改进：动态计算玩家编号
+                function getNextPlayerNumber() {
+                    const existingPlayers = Array.from(theadRow.querySelectorAll('input'))
+                        .map(input => input.value)
+                        .filter(name => name.startsWith(config.defaultPlayerPrefix));
+                    
+                    let maxNum = 0;
+                    existingPlayers.forEach(name => {
+                        const match = name.match(/\d+$/);
+                        if (match) {
+                            const num = parseInt(match[0]);
+                            if (num > maxNum) maxNum = num;
+                        }
+                    });
+                    return maxNum + 1;
+                }
+
+                // --- 重置游戏分数 ---
                 function robustResetGame() {
                     const numPlayerCols = theadRow.children.length - 1;
                     
@@ -560,6 +754,14 @@
                 addPlayerBtn.addEventListener('click', () => {
                     robustAddPlayer();
                     saveGameState();
+                });
+                announceWinnerBtn.addEventListener('click', () => {
+                    const winners = getWinners();
+                    if (winners.length > 0) {
+                        announceWinners(winners);
+                    } else {
+                        alert('还没有获胜者，请先输入分数！');
+                    }
                 });
                 resetGameBtn.addEventListener('click', () => {
                     robustResetGame();
