@@ -530,10 +530,19 @@
 
                     let message = '';
                     if (winners.length === 1) {
-                        message = `恭喜 ${winners[0]} 获得胜利！`;
+                        message = `恭喜 ${winners[0]} 获得本场胜利，斩获MVP，成为牛逼Plus闪耀新星！`;
                     } else {
                         const names = winners.join('、');
                         message = `平局！恭喜 ${names} 并列第一！`;
+                    }
+
+                    // iOS Safari 需要在用户交互时初始化 AudioContext
+                    // 提前创建 AudioContext 以确保音乐能播放
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // iOS 需要先 resume AudioContext
+                    if (audioContext.state === 'suspended') {
+                        audioContext.resume();
                     }
 
                     const utterance = new SpeechSynthesisUtterance(message);
@@ -549,15 +558,15 @@
                     };
 
                     utterance.onend = () => {
-                        // 播报结束后立即播放音乐
+                        // 播报结束后立即播放音乐，传入已初始化的 audioContext
                         setTimeout(() => {
-                            playVictoryMusic();
+                            playVictoryMusic(audioContext);
                         }, 200);
                     };
 
                     utterance.onerror = () => {
                         // 如果播报出错，直接播放音乐
-                        playVictoryMusic();
+                        playVictoryMusic(audioContext);
                     };
 
                     window.speechSynthesis.speak(utterance);
@@ -566,12 +575,25 @@
                 /**
                  * 新增：播放胜利庆祝音乐
                  */
-                function playVictoryMusic() {
+                function playVictoryMusic(existingContext) {
                     // 防止重复播放
                     if (isMusicPlaying === 'playing') return;
                     isMusicPlaying = 'playing';
                     
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    // 使用传入的 audioContext 或创建新的
+                    const audioContext = existingContext || new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // iOS Safari 需要先 resume
+                    if (audioContext.state === 'suspended') {
+                        audioContext.resume().then(() => {
+                            playMusicNotes(audioContext);
+                        });
+                    } else {
+                        playMusicNotes(audioContext);
+                    }
+                }
+
+                function playMusicNotes(audioContext) {
                     const now = audioContext.currentTime;
 
                     // 胜利旋律音符
