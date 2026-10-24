@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f6f3ee;
+  --color-ink: #17150f;
+  --color-muted: #6b665c;
+  --color-line: #e3ddd2;
+  --color-accent: #ff5a1f;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-paper: #15130f;
+    --color-ink: #f2eee6;
+    --color-muted: #a39d92;
+    --color-line: #2c2923;
+  }
+}
+
+html { color-scheme: light dark; }
+body { background: var(--color-paper); color: var(--color-ink); }
+
+/* 桌游计分器定制样式 */
+.winner-col-ws {
+  background-color: #fef9c3 !important; /* yellow-200 */
+}
+.winner-col-parks {
+  background-color: #fde68a !important; /* amber-300 */
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+.table-input {
+  width: 70px;
+  padding: 8px 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 1.125rem;
+  background-color: #ffffff;
+  color: #111827;
+}
+.table-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px #bfdbfe;
+  outline: none;
+}
+.player-name-input {
+  width: 70px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.125rem;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 4px;
+  background-color: transparent;
+  color: #111827;
+}
+.player-name-input:focus {
+  border-color: #3b82f6;
+  outline: none;
+}
+@media (max-width: 640px) {
+  .table-input {
+    width: 50px;
+    font-size: 0.875rem;
+  }
+  .player-name-input {
+    width: 50px;
+    font-size: 0.875rem;
+  }
+}

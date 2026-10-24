@@ -1,0 +1,11 @@
+{
+  "$schema": "https://github.com/aideploytutor/skill-deploy-share/blob/main/STACK.md",
+  "name": "桌游计分器",
+  "createdAt": "2026-10-24",
+  "installed": {
+    "app-foundation": "1.1.1",
+    "db-connect": "1.1.1",
+    "auth-login": "1.1.1",
+    "email-send": "1.2.0"
+  }
+}
